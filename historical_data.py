@@ -19,7 +19,6 @@ class WeatherHistory:
     # SN68230 = Risvollan målestasjon
     # SN68863 = Voll PLU målestasjon
     def __init__(self, Locations='SN68230,SN68863'):
-        self.tNow = datetime.now()
         self.client_id = CREDENTIALS.Frost_ClientID()
         self.api_endpoint = 'https://frost.met.no/observations/v0.jsonld'
         
@@ -51,6 +50,7 @@ class WeatherHistory:
         
         # Issue an HTTP GET request
         r = requests.get(self.api_endpoint, parameters, auth=(self.client_id,''))
+        
         # Extract JSON data from response
         jsondata = r.json()
         if r.status_code == 200:
@@ -84,14 +84,15 @@ class WeatherHistory:
         
         return outData
 
+
 # Test call
 if __name__ == '__main__':
     WH = WeatherHistory()
     res = WH.PullHistoricalData()
     
+    # Plot temperature history
     plt.figure
     for station in res.keys():
-        print(res[station])
         time = res[station]['time']
         temp = res[station]['temperature']
         plt.plot(time, temp, label=res[station]['sourceId'])
