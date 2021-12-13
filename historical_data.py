@@ -25,12 +25,16 @@ class WeatherHistory:
         # Parameters for API calls
         self.Locations = Locations
         self.nLocations = Locations.count(",") + 1
-        self.Variables = 'air_temperature'
+        self.Variables = 'air_temperature,air_pressure_at_sea_level'
         
     
     # Function to fetch data from API
     def PullHistoricalData(self, start_date='three_days_ago', start_time='00:00', end_date='today', end_time='now'):
     
+        # Init. error code
+        nErr = 0
+        ErrorMessage = 'OK!'
+        
         # Treat input arguments, if necessary
         if end_date == 'today':
             end_date = datetime.strftime( datetime.today(), '%Y-%m-%d' )
@@ -41,7 +45,6 @@ class WeatherHistory:
         
         # Define parameters for the data request
         timeInterval = start_date + 'T' + start_time + '/' + end_date + 'T' + end_time
-        print('\nExtracting weather data in the interval: ' + timeInterval + '\n')
         parameters = {
             'sources': self.Locations,
             'elements': self.Variables,
@@ -54,11 +57,12 @@ class WeatherHistory:
         # Extract JSON data from response
         jsondata = r.json()
         if r.status_code == 200:
-            print('Data request from Frost API successful!')
+            pass
         else:
-            print('Error! Returned status code %s' % r.status_code)
-            print('Message: %s' % jsondata['error']['message'])
-            print('Reason: %s' % jsondata['error']['reason'])
+            nErr = r.status_code
+            JSONErrorMessage = ('Message: %s' % jsondata['error']['message'])
+            JSONErrorReason = ('Reason: %s' % jsondata['error']['reason'])
+            ErrorMessage = JSONErrorMessage + ', ' + JSONErrorReason
             return
         
         # Dissect JSON data
@@ -68,34 +72,42 @@ class WeatherHistory:
         LocationList = self.Locations.split(",")
         outData = {};
         for i in range(self.nLocations):
-            outData[LocationList[i]] = {'sourceId': LocationList[i], 'time': [], 'temperature': []}
+            outData[LocationList[i]] = {'sourceId': LocationList[i], 'time': [], 'air_temperature': [],  'air_pressure_at_sea_level': []}
         for i in range(len(data)):
             # Sort observation by station
             sourceId = data[i]['sourceId'].split(":")[0]
             time = datetime.strptime(data[i]['referenceTime'], '%Y-%m-%dT%H:%M:%S.%fZ')
             outData[sourceId]['time'].append(time)
             # Loop through observations
+            print(data[i])
             observations = data[i]['observations']
             for j in range(len(observations)):
                 # Save air temperatures
                 if (observations[j].get('elementId') == 'air_temperature'):
-                    temperature = observations[j].get('value')
-                    outData[sourceId]['temperature'].append(temperature)
+                    outData[sourceId]['air_temperature'].append(observations[j].get('value'))
+                # Save air pressures
+                if (observations[j].get('elementId') == 'air_pressure_at_sea_level'):
+                    outData[sourceId]['air_pressure_at_sea_level'].append(observations[j].get('value'))
         
-        return outData
+        return {'nErr': nErr, 'ErrorMessage': ErrorMessage, 'Data': outData}
 
 
 # Test call
 if __name__ == '__main__':
     WH = WeatherHistory()
     res = WH.PullHistoricalData()
+    if res['nErr'] != 0:
+        print('Error code' + res['nErr'] + 'from function!')
+        quit()
+    
+    data = res['Data'];
     
     # Plot temperature history
     plt.figure
-    for station in res.keys():
-        time = res[station]['time']
-        temp = res[station]['temperature']
-        plt.plot(time, temp, label=res[station]['sourceId'])
+    for station in data.keys():
+        time = data[station]['time']
+        temp = data[station]['air_temperature']
+        plt.plot(time, temp, label=data[station]['sourceId'])
     plt.title('Air temperature, historical data')
     plt.legend(loc='best')
     plt.xlabel('Date/time [MM-DD HH]')
